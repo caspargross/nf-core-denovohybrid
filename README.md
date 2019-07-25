@@ -1,4 +1,4 @@
-# nf-core/denovohybrid
+#![nf-core/denovohybrid](docs/logo/nfcore-denovohybrid_logo.png)
 
 **Hybrid genome assembly**.
 

@@ -26,27 +26,11 @@ def helpMessage() {
                                     Available: conda, docker, singularity, awsbatch, test and more.
 
     Options:
-      --mode                        One of the following assemblers:
+      --mode                        One of the following assemblers: [unicycler, miniasm, wtdbg2]
       --minContigLength             Filter for minimum contig lenght in output
       --genomeSize                  Estimated final genome size (Default 5300000bp)
       --targetShortReadCov          Target short read coverage after subsampling
       --tartgetLongReadCov          Target long read coverage after subsampling
-
-    The typical command for running the pipeline is as follows:
-
-    nextflow run nf-core/denovohybrid --reads '*_R{1,2}.fastq.gz' -profile docker
-
-    Mandatory arguments:
-      --reads                       Path to input data (must be surrounded with quotes)
-      -profile                      Configuration profile to use. Can use multiple (comma separated)
-                                    Available: conda, docker, singularity, awsbatch, test and more.
-
-    Options:
-      --genome                      Name of iGenomes reference
-      --singleEnd                   Specifies that the input is single end reads
-
-    References                      If not specified in the configuration file or you wish to overwrite any of the references.
-      --fasta                       Path to Fasta reference
 
     Other options:
       --outdir                      The output directory where the results will be saved
@@ -59,10 +43,6 @@ def helpMessage() {
       --awsregion                   The AWS Region for your AWS Batch job to run on
     """.stripIndent()
 }
-
-/*
- * SET UP CONFIGURATION VARIABLES
- */
 
 // Show help emssage
 if (params.help){
@@ -178,7 +158,7 @@ process get_software_versions {
     porechop --version > v_porechop.txt
     quast --version > v_quast.txt
     racon --version > v_racon.txt
-	seqtk 2>&1| grep Version > v_seqtk.txt
+    seqtk 2>&1| grep Version > v_seqtk.txt
     unicycler --version > v_unicycler.txt
     wtdbg2 -V > v_wtdbg2.txt
     scrape_software_versions.py &> software_versions_mqc.yaml
@@ -226,8 +206,6 @@ target_lr_length = params.targetLongReadCov * params.genomeSize
                            P R O C E S S E S 
 ------------------------------------------------------------------------------
 */
-
-
 process porechop {
 // Trim adapter sequences on long read nanopore files
     tag{id}
@@ -309,6 +287,7 @@ process nanoplot {
 }
 
 process fastqc {
+// Short read quality control
     tag "$id"
     publishDir "${params.outdir}/${id}/qc/shortread/fastqc", mode: 'copy',
         saveAs: {filename -> filename.indexOf(".zip") > 0 ? "zips/$filename" : "$filename"}
@@ -436,8 +415,6 @@ process wtdbg{
     """
 }
 
-
-
 process racon {
 // Find consensus in miniasm assembly by realigning long reads
 // Reiterate 3 times
@@ -483,9 +460,6 @@ assembly_merged = assembly_nopilon
         )
     .into{asm_quast; asm_format}
 
-/*
- *  STEP XX - PILON
- */
 process pilon{
 // Polishes long read assemly with short reads
     tag{id}
@@ -568,6 +542,7 @@ process format_final_output {
 }
 
 process multiqc {
+// Generate summary report
     publishDir "${params.outdir}/MultiQC", mode: 'copy'
 
     input:
@@ -588,7 +563,6 @@ process multiqc {
     """
     multiqc -f $rtitle $rfilename --config $multiqc_config .
     """
-
 }
 
 process output_documentation {
