@@ -3,11 +3,21 @@ from __future__ import print_function
 from collections import OrderedDict
 import re
 
-# TODO nf-core: Add additional regexes for new tools in process get_software_versions
 regexes = {
     'nf-core/denovohybrid': ['v_pipeline.txt', r"(\S+)"],
     'Nextflow': ['v_nextflow.txt', r"(\S+)"],
+    'Bandage': ['v_bandage.txt', r"Version:(\S+)"],
     'FastQC': ['v_fastqc.txt', r"FastQC v(\S+)"],
+    'Filtlong': ['v_filtlong.txt', r"Filtlong v(\S+)"],
+    'miniasm': ['v_miniasm.txt', r"(\S+)"],
+    'minimap2': ['v_minimap2.txt', r"(\S+)"],
+    'Pilon': ['v_pilon.txt', r"Pilon version(\S+)"],
+    'Porechop': ['v_porechop.txt', r"(\S+)"],
+    'Quast': ['v_quast.txt', r"QUAST v(\S+)"],
+    'Racon': ['v_racon.txt', r"v(\S+)"],
+    'Seqtk': ['v_seqtk.txt', r"Version:(\S+)"],
+    'Unicycler': ['v_unicycler.txt', r"Unicycler v(\S+)"],
+    'wtdbg2': ['v_wtdbg2.txt', r"wtdbg2 (\S+)"],
     'MultiQC': ['v_multiqc.txt', r"multiqc, version (\S+)"],
 }
 results = OrderedDict()

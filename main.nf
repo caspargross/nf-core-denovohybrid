@@ -16,6 +16,21 @@ def helpMessage() {
     log.info"""
 
     Usage:
+    The typical command for running the pipeline is as follows:
+
+    nextflow run nf-core/denovohybrid --input  'read_locations.tsv' -profile docker
+
+    Mandatory arguments:
+      --input                       Path to tsv file with read locations (must be surrounded with quotes)
+      --profile                      Configuration profile to use. Can use multiple (comma separated)
+                                    Available: conda, docker, singularity, awsbatch, test and more.
+
+    Options:
+      --mode                        One of the following assemblers:
+      --minContigLength             Filter for minimum contig lenght in output
+      --genomeSize                  Estimated final genome size (Default 5300000bp)
+      --targetShortReadCov          Target short read coverage after subsampling
+      --tartgetLongReadCov          Target long read coverage after subsampling
 
     The typical command for running the pipeline is as follows:
 
@@ -60,21 +75,6 @@ if (params.genomes && params.genome && !params.genomes.containsKey(params.genome
     exit 1, "The provided genome '${params.genome}' is not available in the iGenomes file. Currently the available genomes are ${params.genomes.keySet().join(", ")}"
 }
 
-// TODO nf-core: Add any reference files that are needed
-// Configurable reference genomes
-fasta = params.genome ? params.genomes[ params.genome ].fasta ?: false : false
-if ( params.fasta ){
-    fasta = file(params.fasta)
-    if( !fasta.exists() ) exit 1, "Fasta file not found: ${params.fasta}"
-}
-//
-// NOTE - THIS IS NOT USED IN THIS PIPELINE, EXAMPLE ONLY
-// If you want to use the above in a process, define the following:
-//   input:
-//   file fasta from fasta
-//
-
-
 // Has the run name been specified by the user?
 //  this has the bonus effect of catching both -name and --name
 custom_runName = params.name
@@ -97,30 +97,6 @@ if( workflow.profile == 'awsbatch') {
 ch_multiqc_config = Channel.fromPath(params.multiqc_config)
 ch_output_docs = Channel.fromPath("$baseDir/docs/output.md")
 
-/*
- * Create a channel for input read files
- */
-if(params.readPaths){
-    if(params.singleEnd){
-        Channel
-            .from(params.readPaths)
-            .map { row -> [ row[0], [file(row[1][0])]] }
-            .ifEmpty { exit 1, "params.readPaths was empty - no input files supplied" }
-            .into { read_files_fastqc; read_files_trimming }
-    } else {
-        Channel
-            .from(params.readPaths)
-            .map { row -> [ row[0], [file(row[1][0]), file(row[1][1])]] }
-            .ifEmpty { exit 1, "params.readPaths was empty - no input files supplied" }
-            .into { read_files_fastqc; read_files_trimming }
-    }
-} else {
-    Channel
-        .fromFilePairs( params.reads, size: params.singleEnd ? 1 : 2 )
-        .ifEmpty { exit 1, "Cannot find any reads matching: ${params.reads}\nNB: Path needs to be enclosed in quotes!\nIf this is single-end data, please specify --singleEnd on the command line." }
-        .into { read_files_fastqc; read_files_trimming }
-}
-
 
 // Header log info
 log.info nfcoreHeader()
@@ -128,9 +104,9 @@ def summary = [:]
 if(workflow.revision) summary['Pipeline Release'] = workflow.revision
 summary['Run Name']         = custom_runName ?: workflow.runName
 // TODO nf-core: Report custom parameters here
-summary['Reads']            = params.reads
-summary['Fasta Ref']        = params.fasta
-summary['Data Type']        = params.singleEnd ? 'Single-End' : 'Paired-End'
+summary['Input File']            = params.input
+summary['Genome Size']        = params.genomeSize
+summary['Assembler'] = params.mode
 summary['Max Resources']    = "$params.max_memory memory, $params.max_cpus cpus, $params.max_time time per job"
 if(workflow.containerEngine) summary['Container'] = "$workflow.containerEngine - $workflow.container"
 summary['Output dir']       = params.outdir
@@ -189,51 +165,416 @@ process get_software_versions {
     file "software_versions.csv"
 
     script:
-    // TODO nf-core: Get all tools to print their version number here
     """
     echo $workflow.manifest.version > v_pipeline.txt
     echo $workflow.nextflow.version > v_nextflow.txt
+    Bandage --version > v_bandage.txt
     fastqc --version > v_fastqc.txt
+    filtlong --version > v_filtlong.txt
+    miniasm -V > v_miniasm.txt
+    minimap2 --version > v_minimap2.txt	
     multiqc --version > v_multiqc.txt
+    pilon --version > v_pilon.txt
+    porechop --version > v_porechop.txt
+    quast --version > v_quast.txt
+    racon --version > v_racon.txt
+	seqtk 2>&1| grep Version > v_seqtk.txt
+    unicycler --version > v_unicycler.txt
+    wtdbg2 -V > v_wtdbg2.txt
     scrape_software_versions.py &> software_versions_mqc.yaml
     """
 }
 
-
-
 /*
- * STEP 1 - FastQC
- */
-process fastqc {
-    tag "$name"
-    publishDir "${params.outdir}/fastqc", mode: 'copy',
-        saveAs: {filename -> filename.indexOf(".zip") > 0 ? "zips/$filename" : "$filename"}
+------------------------------------------------------------------------------
+                       C O N F I G U R A T I O N
+------------------------------------------------------------------------------
+*/
+// Define valid run modes:
+validModes = ['unicycler', 'miniasm', 'wtdbg2', 'all']
+validModesLR = ['unicycler', 'miniasm', 'wtdbg2', 'all_lr']
+
+// Set values from parameters:
+sampleFile = file(params.input)
+modes = params.mode.tokenize(',')
+
+// Set long read only execution flag
+longReadOnly = checkLongReadOnly(sampleFile);
+
+// Setup channels
+files=Channel.create()
+
+// check if mode input is valid and create channel
+if (longReadOnly) {
+    if (!modes.every{validModesLR.contains(it)}) {
+        log.info "Wrong execution mode, should be one of " + validModesLR
+        exit 1
+    }
+    files = extractFastq(sampleFile);
+} else {
+    if (!modes.every{validModes.contains(it)}) {
+        log.info "Wrong execution mode, should be one of " + validModes
+        exit 1
+    }
+    files = extractFastq(sampleFile);
+}
+
+target_lr_length = params.targetLongReadCov * params.genomeSize
+
+/* 
+------------------------------------------------------------------------------
+                           P R O C E S S E S 
+------------------------------------------------------------------------------
+*/
+
+
+process porechop {
+// Trim adapter sequences on long read nanopore files
+    tag{id}
 
     input:
-    set val(name), file(reads) from read_files_fastqc
+    set id, file(lr), file(sr1), file(sr2) from files
 
     output:
-    file "*_fastqc.{zip,html}" into fastqc_results
+    set id, file('lr_porechop.fastq'), file(sr1), file(sr2) into files_porechop
+    set id, file('lr_porechop.fastq'), val("raw") into files_nanoplot_raw
+
+    script:
+    // Join multiple longread files if possible
+    """
+    cat ${lr} > nanoreads.fastq
+    porechop -i nanoreads.fastq -t ${task.cpus} -o lr_porechop.fastq
+    """
+}
+
+process filtlong {
+// Quality filter long reads focus on quality instead of length to preserve shorter reads for plasmids
+    tag{id}
+
+    input:
+    set id, lr, sr1, sr2 from files_porechop
+
+    output:
+    set id, file("lr_filtlong.fastq"), sr1, sr2 into files_lr_filtered
+    set id, file("lr_filtlong.fastq"), val('filtered') into files_nanoplot_filtered
 
     script:
     """
-    fastqc -q $reads
+    filtlong \
+    --min_length 1000 \
+    --keep_percent 90 \
+    --length_weight 0.5\
+    --target_bases  ${target_lr_length} \
+    ${lr} > lr_filtlong.fastq
+    """
+}
+
+// Junction: Include short read preprocessing only when sr available
+files_to_fastqc = Channel.create()
+files_preprocessed = Channel.create()
+files_filtered = Channel.create()
+
+files_lr_filtered
+    .choice(files_preprocessed, files_to_fastqc){
+        longReadOnly ? 0 : 1
+        }
+// Combine channels after preprocessing and distribute to different assemblers
+files_preprocessed
+    .mix(files_filtered)
+    .into{
+        files_pre_unicycler;
+        files_pre_miniasm;
+        files_pre_wtdbg2;
+        }
+
+process nanoplot {
+// Quality check for nanopore reads and Quality/Length Plots
+    tag{id}
+    publishDir "${params.outdir}/${id}/qc/longread_${type}/", mode: 'copy'
+
+    input:
+    set id, lr, type from files_nanoplot_raw.mix(files_nanoplot_filtered)
+
+    output:
+    file '*.png'
+    file '*.html'
+    file '*.txt'
+    set id, file("*_NanoStats.txt"), type into stats_lr
+
+    script:
+    """
+    NanoPlot -t ${task.cpus} -p ${type}_  --title ${id}_${type} -c darkblue --fastq ${lr}
+    """
+
+}
+
+process fastqc {
+    tag "$id"
+    publishDir "${params.outdir}/${id}/qc/shortread/fastqc", mode: 'copy',
+        saveAs: {filename -> filename.indexOf(".zip") > 0 ? "zips/$filename" : "$filename"}
+
+    input:
+    set id, lr, sr1, sr2 from files_to_fastqc
+
+    output:
+    file "*_fastqc.{zip,html}" into fastqc_results
+    set id, lr, sr1, sr2 into files_to_seqpurge
+
+    script:
+    """
+    fastqc -q $sr1 $sr2 -o .
+    """
+}
+
+process seqpurge {
+// Trim adapters on short read files
+    publishDir "${params.outdir}/${id}/qc/shortread/", mode: 'copy', pattern: "${id}_readQC.qcml"
+    tag{id}
+
+    input:
+    set id, lr, sr1, sr2 from files_to_seqpurge
+
+    output:
+    set id, lr, file('sr1.fastq.gz'), file('sr2.fastq.gz') into files_purged
+    set id, file("${id}_readQC.qcml"), val("read_qc") into stats_sr
+
+    script:
+    """
+    SeqPurge -in1 ${sr1} -in2 ${sr2} -threads ${task.cpus} -out1 sr1.fastq.gz -out2 sr2.fastq.gz -qc ${id}_readQC.qcml 
+    """
+}
+
+process sample_shortreads {
+// Subset short reads to reach target coverage
+    tag{id}
+
+    input:
+    set id, lr, sr1, sr2 from files_purged
+
+    output:
+    set id, lr, file('sr1_filt.fastq'), file('sr2_filt.fastq') into files_filtered
+
+    shell:
+    '''
+    readLength=$(zcat !{sr1} | awk 'NR % 4 == 2 {s += length($1); t++} END {print s/t}')
+    srNumber=$(echo "(!{params.genomeSize} * !{params.targetShortReadCov})/${readLength}" | bc)
+    seqtk sample -s100 !{sr1} ${srNumber} > sr1_filt.fastq 
+    seqtk sample -s100 !{sr2} ${srNumber} > sr2_filt.fastq 
+    '''
+}
+
+process miniasm{
+// Long read assembly using minimap2 and  miniasm
+    tag{id}
+    publishDir "${params.outdir}/${id}/assembly/miniasm", mode: 'copy'
+
+    input:
+    set id, lr, sr1, sr2 from files_pre_miniasm
+
+    output:
+    set id, lr, sr1, sr2, file("${id}_assembly_miniasm.fasta"), val('miniasm') into files_nocon_miniasm
+    set id, val('miniasm'), file("${id}_graph_miniasm.gfa") into assembly_graph_miniasm
+
+    when:
+    isMode(['miniasm', 'all', 'all_lr'])
+
+    script:
+    """
+    minimap2 -x ava-ont -t ${task.cpus} ${lr} ${lr} > ovlp.paf
+    miniasm -f ${lr} ovlp.paf > ${id}_graph_miniasm.gfa
+    awk '/^S/{print ">"\$2"\\n"\$3}' ${id}_graph_miniasm.gfa | fold > ${id}_assembly_miniasm.fasta
+    """
+}
+
+process unicycler{
+// complete bacterial hybrid assembly pipeline
+// accepts both hybrid data and longread only
+    tag{id}
+    publishDir "${params.outdir}/${id}/assembly/", mode: 'copy'   
+   
+    input:
+    set id, lr, sr1, sr2 from files_pre_unicycler
+
+    output:
+    set id, file("unicycler/assembly.fasta"), val('unicycler') into assembly_unicycler
+    set id, val('unicycler'), file("unicycler/assembly.gfa") into assembly_graph_unicycler
+    file("unicycler/assembly.fasta")
+    file("unicycler/unicycler.log")
+
+    when:
+    isMode(['unicycler', 'all', 'all_lr'])
+
+    script:
+    if (!longReadOnly)
+        """ 
+        unicycler -1 ${sr1} -2 ${sr2} -l ${lr} -o unicycler -t ${task.cpus}
+        """
+    else 
+        """
+        unicycler -l ${lr} -o unicycler -t ${task.cpus}
+        """
+}
+
+process wtdbg{
+// Long read assembly with wtdbg2 assembler
+	tag{id}
+	publishDir "${params.outdir}/${id}/assembly/wtdbg2", mode: 'copy'
+	
+	input:
+	set id, lr, sr1, sr2 from files_pre_wtdbg2
+
+	output:
+	set id, lr, sr1, sr2, file("${id}_assembly_wtdbg2.fasta"), val('wtdb2') into files_nocon_wtdbg2
+	
+    when:
+    isMode(['wtdb2', 'all', 'all_lr'])
+
+    script:
+    """
+    wtdbg2 -x rs -g ${params.genomeSize} -i ${lr} -t ${task.cpus} -fo ${id}
+    wtpoa-cns -t ${task.cpus} -i ${id}.ctg.lay.gz -fo ${id}_assembly_wtdbg2.fasta
     """
 }
 
 
 
+process racon {
+// Find consensus in miniasm assembly by realigning long reads
+// Reiterate 3 times
+    tag{id}
+    publishDir "${params.outdir}/${id}/assembly_processed/racon", mode: 'copy'
+
+    input:
+    set id, lr, sr1, sr2, assembly, type from files_nocon_miniasm.mix(files_nocon_wtdbg2)
+
+    output:
+    set id, lr,  sr1, sr2, file("${id}_consensus_racon.fasta"), type into files_unpolished_racon
+
+    file("${id}_consensus_racon.fasta")
+
+    script:
+    """
+    minimap2 -x map-ont -t ${task.cpus} ${assembly} ${lr} > map1.paf
+    racon -m 8 -x -6 -g -8 -w 500 -t ${task.cpus} ${lr} map1.paf ${assembly} > cons1.fasta
+    minimap2 -x map-ont -t ${task.cpus} cons1.fasta ${lr} > map2.paf
+    racon -m 8 -x -6 -g -8 -w 500 -t ${task.cpus} ${lr} map2.paf cons1.fasta > cons2.fasta
+    minimap2 -x map-ont -t ${task.cpus} cons2.fasta ${lr} >map3.paf
+    racon -m 8 -x -6 -g -8 -w 500 -t ${task.cpus} ${lr} map3.paf cons2.fasta > ${id}_consensus_racon.fasta
+    """
+}
+
+// Junction! Create channel for all unpolished files to be cleaned with Pilon
+// Execute pilon only when short reads are available
+files_pilon = Channel.create()
+assembly_nopilon = Channel.create()
+assembly_pilon = Channel.create()
+assembly_merged = Channel.create()
+
+files_unpolished_racon //.mix( 
+    //files_unpolished_flye)
+    .choice(files_pilon, assembly_nopilon){
+        longReadOnly ? 1 : 0}
+
+assembly_merged = assembly_nopilon
+    .map{it -> [it[0], it[4], it[5]]}
+    .mix(
+        assembly_unicycler,
+        assembly_pilon 
+        )
+    .into{asm_quast; asm_format}
+
 /*
- * STEP 2 - MultiQC
+ *  STEP XX - PILON
  */
+process pilon{
+// Polishes long read assemly with short reads
+    tag{id}
+    publishDir "${params.outdir}/${id}/assembly_processed/pilon", mode: 'copy'
+
+    input:
+    set id, lr, sr1, sr2, contigs, type from files_pilon
+
+    output:
+    set id, file("${id}_${type}_pilon.fasta"), type into assembly_pilon
+
+    script:
+    """ 
+    bowtie2-build ${contigs} contigs_index.bt2 
+
+    bowtie2 --local --very-sensitive-local -I 0 -X 2000 -x contigs_index.bt2 \
+    -1 ${sr1} -2 ${sr2} | samtools sort -o alignments.bam -T reads.tmp 
+    
+    samtools index alignments.bam
+
+    pilon -Xmx16384m --genome ${contigs} --frags alignments.bam --changes \
+    --output ${id}_${type}_pilon --fix all
+    """
+}
+
+process draw_assembly_graph {
+// Use Bandage to draw a picture of the assembly graph
+    tag{id}
+    publishDir "${params.outdir}/${id}/assembly/graph_plot/", mode: 'copy'
+
+    input:
+    set id, type, gfa from assembly_graph_unicycler.mix(assembly_graph_miniasm)
+
+    output:
+    file("${id}_${type}_graph.svg")
+
+    script:
+    """
+    Bandage image ${gfa} ${id}_${type}_graph.svg
+    """
+}
+
+process quast{
+// Assembly quality control
+    tag{id}
+    publishDir "${params.outdir}/${id}/qc/quast", mode: 'copy'
+
+    input:
+    set id, assembly, type from asm_quast
+    
+    output:
+    file("${id}_${type}/report.tsv") into quast_results
+    file("${id}_${type}/*")
+
+    script:
+    """
+    quast -o ${id}_${type} -l ${id}_${type} -t ${task.cpus} ${assembly}
+    #cp ${id}_${type}/report.tsv quast_${id}_${type}.tsv
+    """
+}
+
+process format_final_output {
+// Filter contigs by length and give consistenc contig naming
+    publishDir "${params.outdir}/${id}/genomes/", mode: 'copy'
+    tag{id}
+
+    input:
+    set id, contigs, type from asm_format
+
+    output:
+    //set id, type into complete_status
+    set id, type, file("${id}_${type}_genome.fasta") into final_files
+    set id, type, val("${params.outdir}/${id}/genomes/${id}_${type}_genome.fasta") into final_files_plasmident
+
+    script:
+    data_source = longReadOnly ? "nanopore" : "hybrid"
+    """
+    format_output.py ${contigs} ${id} ${type} ${params.minContigLength} ${data_source}
+    """
+}
+
 process multiqc {
     publishDir "${params.outdir}/MultiQC", mode: 'copy'
 
     input:
     file multiqc_config from ch_multiqc_config
-    // TODO nf-core: Add in log files from your new processes for MultiQC to find!
     file ('fastqc/*') from fastqc_results.collect().ifEmpty([])
     file ('software_versions/*') from software_versions_yaml.collect()
+    file ('*/report.tsv') from quast_results.collect().ifEmpty([])
     file workflow_summary from create_workflow_summary(summary)
 
     output:
@@ -244,17 +585,12 @@ process multiqc {
     script:
     rtitle = custom_runName ? "--title \"$custom_runName\"" : ''
     rfilename = custom_runName ? "--filename " + custom_runName.replaceAll('\\W','_').replaceAll('_+','_') + "_multiqc_report" : ''
-    // TODO nf-core: Specify which MultiQC modules to use with -m for a faster run time
     """
     multiqc -f $rtitle $rfilename --config $multiqc_config .
     """
+
 }
 
-
-
-/*
- * STEP 3 - Output Description HTML
- */
 process output_documentation {
     publishDir "${params.outdir}/pipeline_info", mode: 'copy'
 
@@ -270,6 +606,56 @@ process output_documentation {
     """
 }
 
+
+/*
+ * Input file handling functions
+ */
+
+def isMode(it) {
+  // returns whether a given list of arguments contains at least one valid mode
+it.any {modes.contains(it)}
+}
+
+def returnFile(it) {
+// Return file if it exists
+    inputFile = file(it)
+    if (!file(inputFile).exists()) exit 1, "The following file from the TSV file was not found: ${inputFile}, see --help for more information"
+    return inputFile
+}
+
+def extractFastq(tsvFile) {
+  // Extracts Read Files from TSV
+  Channel.from(tsvFile)
+  .ifEmpty {exit 1, log.info "Cannot find path file ${tsvFile}"}
+  .splitCsv(sep:'\t')
+  .map { row ->
+    if (longReadOnly) {
+        // long read only
+        def id = row[0]
+        def lr = returnFile(row[1])
+        [id, lr, "", ""]
+
+    } else {
+        // hybrid assembly
+        def id = row[0]
+        def sr1 = returnFile(row[2])
+        def sr2 = returnFile(row[3])
+        def lr = returnFile(row[1])
+        [id, lr, sr1, sr2]
+        }
+    }
+}
+
+def checkLongReadOnly(tsvFile) {
+  // Checks if tsv files contains only longreads or lr + illumina
+  row = tsvFile.readLines().get(0)
+  ncol = row.split('\t').size()
+  if (ncol < 3) {
+    true
+  } else {
+    false
+  }
+}
 
 
 /*
@@ -306,7 +692,6 @@ workflow.onComplete {
     email_fields['summary']['Nextflow Build'] = workflow.nextflow.build
     email_fields['summary']['Nextflow Compile Timestamp'] = workflow.nextflow.timestamp
 
-    // TODO nf-core: If not using MultiQC, strip out this code (including params.maxMultiqcEmailFileSize)
     // On success try attach the multiqc report
     def mqc_report = null
     try {
@@ -353,13 +738,13 @@ workflow.onComplete {
     }
 
     // Write summary e-mail HTML to a file
-    def output_d = file( "${params.outdir}/pipeline_info/" )
+    def output_d = new File( "${params.outdir}/pipeline_info/" )
     if( !output_d.exists() ) {
       output_d.mkdirs()
     }
-    def output_hf = file( output_d, "pipeline_report.html" )
+    def output_hf = new File( output_d, "pipeline_report.html" )
     output_hf.withWriter { w -> w << email_html }
-    def output_tf = file( output_d, "pipeline_report.txt" )
+    def output_tf = new File( output_d, "pipeline_report.txt" )
     output_tf.withWriter { w -> w << email_txt }
 
     c_reset = params.monochrome_logs ? '' : "\033[0m";
@@ -367,10 +752,10 @@ workflow.onComplete {
     c_green = params.monochrome_logs ? '' : "\033[0;32m";
     c_red = params.monochrome_logs ? '' : "\033[0;31m";
 
-    if (workflow.stats.ignoredCount > 0 && workflow.success) {
+    if (workflow.stats.ignoredCountFmt > 0 && workflow.success) {
       log.info "${c_purple}Warning, pipeline completed, but with errored process(es) ${c_reset}"
-      log.info "${c_red}Number of ignored errored process(es) : ${workflow.stats.ignoredCount} ${c_reset}"
-      log.info "${c_green}Number of successfully ran process(es) : ${workflow.stats.succeedCount} ${c_reset}"
+      log.info "${c_red}Number of ignored errored process(es) : ${workflow.stats.ignoredCountFmt} ${c_reset}"
+      log.info "${c_green}Number of successfully ran process(es) : ${workflow.stats.succeedCountFmt} ${c_reset}"
     }
 
     if(workflow.success){

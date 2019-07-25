@@ -106,10 +106,10 @@ If `-profile` is not specified at all the pipeline will be run locally and expec
   * A profile with a complete configuration for automated testing
   * Includes links to test data so needs no other parameters
 
-<!-- TODO nf-core: Document required command line parameters -->
 
-### `--reads`
-Use this to specify the location of your input FastQ files. For example:
+### `--input`
+This pipeline allows the assembly of multiple samples in a single run. Since each samples can have multiple input files (2x paired end short reads and 1x long reads),  a tab separated design file is used to supply the input files. 
+
 
 ```bash
 --reads 'path/to/data/sample_*_{1,2}.fastq'

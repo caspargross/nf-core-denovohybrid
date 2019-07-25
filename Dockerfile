@@ -1,5 +1,5 @@
 FROM nfcore/base
-LABEL authors="Caspar Gross" \
+LABEL authors="Caspar Gross`" \
       description="Docker image containing all requirements for nf-core/denovohybrid pipeline"
 
 COPY environment.yml /
