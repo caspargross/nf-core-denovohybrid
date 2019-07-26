@@ -11,7 +11,7 @@
   * [Reproducibility](#reproducibility)
 * [Main arguments](#main-arguments)
   * [`-profile`](#-profile)
-  * [`--reads`](#--reads)
+  * [`--input`](#--input)
   * [`--singleEnd`](#--singleend)
 * [Reference genomes](#reference-genomes)
   * [`--genome` (using iGenomes)](#--genome-using-igenomes)
@@ -55,7 +55,7 @@ NXF_OPTS='-Xms1g -Xmx4g'
 The typical command for running the pipeline is as follows:
 
 ```bash
-nextflow run nf-core/denovohybrid --reads '*_R{1,2}.fastq.gz' -profile docker
+nextflow run nf-core/denovohybrid -input 'read_locations.tsv' -profile docker
 ```
 
 This will launch the pipeline with the `docker` configuration profile. See below for more information about profiles.
@@ -108,78 +108,95 @@ If `-profile` is not specified at all the pipeline will be run locally and expec
 
 
 ### `--input`
-This pipeline allows the assembly of multiple samples in a single run. Since each samples can have multiple input files (2x paired end short reads and 1x long reads),  a tab separated design file is used to supply the input files. 
+This pipeline allows the assembly of multiple samples in a single run. Since each sample usually has multiple input files (2x paired end short reads and 1x long reads),  a tab separated design file is used to supply the input files. 
 
+The design file should be a plain, tab-separated textfile with the following format:
+ |sample1 |readfolder/reads_s1_nanopore.fastq.gz|readfolder/reads_s1_illumina_R1.fastq.gz|readfolder/reads_s1_illumina_R2.fastq.gz|
+ |sample2 |readfolder/reads_s2_nanopore.fastq.gz|readfolder/reads_s2_illumina_R1.fastq.gz|readfolder/reads_s2_illumina_R2.fastq.gz|
+
+ Content of the columns:
+    1) Sample_Id Unique identifier to this sample, will be to label output files.
+    2) Short_Reads_1 Path to .fastq.gz file with part 1 of Illumina paired end reads.
+    3) Short_Reads_2 Path to .fastq.gz file with part 2 of Illumina paired end reads.
+    4) Long_Reads  Path to .fastq.gz file containing long reads
+
+File paths should be absolute or relative to the current workdirectory.
+
+When short read files are missing in the design file, the pipeline automatically creates a long-read only assembly with the specified assembly algorithm.
 
 ```bash
---reads 'path/to/data/sample_*_{1,2}.fastq'
+--input 'path/to/design_file.tsv'
 ```
 
 Please note the following requirements:
 
-1. The path must be enclosed in quotes
-2. The path must have at least one `*` wildcard character
-3. When using the pipeline with paired end data, the path must use `{1,2}` notation to specify read pairs.
+### `--mode`
 
-If left unspecified, a default pattern is used: `data/*{1,2}.fastq.gz`
+The `--mode` options allows to chose between different assemblers. The quality control and read preprocessing steps are identical. Currently, four different modes are available
 
-### `--singleEnd`
-By default, the pipeline expects paired-end data. If you have single-end data, you need to specify `--singleEnd` on the command line when you launch the pipeline. A normal glob pattern, enclosed in quotation marks, can then be used for `--reads`. For example:
+#### `unicycler` 
 
-```bash
---singleEnd --reads '*.fastq'
-```
-
-It is not possible to run a mixture of single-end and paired-end files in one run.
-
-
-## Reference genomes
-
-The pipeline config files come bundled with paths to the illumina iGenomes reference index files. If running with docker or AWS, the configuration is set up to use the [AWS-iGenomes](https://ewels.github.io/AWS-iGenomes/) resource.
-
-### `--genome` (using iGenomes)
-There are 31 different species supported in the iGenomes references. To run the pipeline, you must specify which to use with the `--genome` flag.
-
-You can find the keys to specify the genomes in the [iGenomes config file](../conf/igenomes.config). Common genomes that are supported are:
-
-* Human
-  * `--genome GRCh37`
-* Mouse
-  * `--genome GRCm38`
-* _Drosophila_
-  * `--genome BDGP6`
-* _S. cerevisiae_
-  * `--genome 'R64-1-1'`
-
-> There are numerous others - check the config file for more.
-
-Note that you can use the same configuration setup to save sets of reference files for your own use, even if they are not part of the iGenomes resource. See the [Nextflow documentation](https://www.nextflow.io/docs/latest/config.html) for instructions on where to save such a file.
-
-The syntax for this reference configuration is as follows:
-
-<!-- TODO nf-core: Update reference genome example according to what is needed -->
-
-```nextflow
-params {
-  genomes {
-    'GRCh37' {
-      fasta   = '<path to the genome fasta file>' // Used if no star index given
-    }
-    // Any number of additional genomes, key is used with --genome
-  }
-}
-```
-
-<!-- TODO nf-core: Describe reference path flags -->
-### `--fasta`
-If you prefer, you can specify the full path to your reference genome when you run the pipeline:
+Creates an assembly with the bacterial genome assembler _Unicycler_. This assembly methods is a whole pipeline in itself and in the first step creates a short read assembly using _SPAdes_. The long reads are then mapped to the inital assembly graph in order to solve loops in the graph by creating bridges betwenn the contigs. Additional polishing steps increase the per base accuracy using accurate short reads.  _Unicycler_ is currently the state of the art hybrid assembler for bacteria and is in many cases able to resolve complete closed genomes. _Unicycler_ is executed with default settings. Unicycler is the default mode when not specified different.
 
 ```bash
---fasta '[path to Fasta reference]'
+--mode unicycler
 ```
 
-### `--igenomesIgnore`
-Do not load `igenomes.config` when running the pipeline. You may choose this option if you observe clashes between custom parameters and those supplied in `igenomes.config`.
+#### `miniasm`
+
+_miniasm_ is a simple and fast long read assembler. It is also suitable for large eukaryotic genomes. _miniasm_ is followed by a consensus step with _racon_ and short read polishing using _Pilon_. 
+
+```bash
+--mode miniasm
+```
+
+#### `wtdbg2`
+
+`Wtdbg2` is a very recent, and extremely fast long read assembler. It can be used to efficiently assembly large genomes. Similar to `miniasm`, `wtdbg2` is also followed by a `racon` consensus step and a short read polishing using `Pilon` if available.
+
+```bash
+--mode miniasm
+```
+
+#### `all`
+
+Runs all available assembly methods on the same sample. This options helps to compare the results and performance of the different assemblers. Results are stored in separate subfolders (see output documentation)
+
+```bash
+--mode all
+```
+
+### `minContigLength`
+
+Default: 1000
+
+In the final filtering step, contigs with a size lower than this threshhold are removed from the `FASTA` file.
+
+```bash
+--minContigLength 1000
+```
+
+### genomeSize
+
+Default: 5300000
+
+The `genomeSize` parameter is defined by the approximate size of the expected assembly result. Integer parameter with the number of base pairs.  This value is used to calculate the amount of bases needed to reach the target coverage and is an required input to some of the assemblers.
+
+```bash
+--genomeSize 4900000
+```
+
+### `targetShortReadCov` / `targetLongReadCov`
+
+Default: 100
+
+Very high coverage read files are subsampled to the specified target long and short coverages. This helps to speed up the assembly process.
+
+```bash
+--targetShortReadCov 60
+--targetLongReadCov 60
+```
+
 
 ## Job resources
 ### Automatic resubmission

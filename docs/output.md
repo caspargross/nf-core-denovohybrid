@@ -11,6 +11,14 @@ and processes data using the following steps:
 * [FastQC](#fastqc) - read quality control
 * [MultiQC](#multiqc) - aggregate report, describing results of the whole pipeline
 
+## Porechop
+[Porechop](TOOO) 
+
+
+## Filtlong
+
+## NanoPlot
+
 ## FastQC
 [FastQC](http://www.bioinformatics.babraham.ac.uk/projects/fastqc/) gives general quality metrics about your reads. It provides information about the quality score distribution across your reads, the per base sequence content (%T/A/G/C). You get information about adapter contamination and other overrepresented sequences.
 
@@ -18,12 +26,27 @@ For further reading and documentation see the [FastQC help](http://www.bioinform
 
 > **NB:** The FastQC plots displayed in the MultiQC report shows _untrimmed_ reads. They may contain adapter sequence and potentially regions with low quality. To see how your reads look after trimming, look at the FastQC reports in the `trim_galore` directory.
 
-**Output directory: `results/fastqc`**
+**Output directory: `results/sample/qc/shortread`**
 
 * `sample_fastqc.html`
   * FastQC report, containing quality metrics for your untrimmed raw fastq files
 * `zips/sample_fastqc.zip`
   * zip file containing the FastQC report, tab-delimited data file and plot images
+
+## Bandage
+
+[Bandage](TODO) creates a visual representation of an assembly graph. This helps to analyse connections in the final assemblies which are not included in a plain `FASTA` file. Only results assemblers that create output in `.gfa` format (_Unicycler_, _miniasm_) can be visualized.
+
+**Output directory: `results/sample/assembly/graph_plot`**
+
+* `sample_mode_graph.svg`
+  * Image of the graph in `svg` format
+
+##  Assemblers
+All different assembly methods produce their results in the 
+
+## Quast
+
 
 
 ## MultiQC
