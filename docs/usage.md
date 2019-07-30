@@ -12,11 +12,15 @@
 * [Main arguments](#main-arguments)
   * [`-profile`](#-profile)
   * [`--input`](#--input)
-  * [`--singleEnd`](#--singleend)
-* [Reference genomes](#reference-genomes)
-  * [`--genome` (using iGenomes)](#--genome-using-igenomes)
-  * [`--fasta`](#--fasta)
-  * [`--igenomesIgnore`](#--igenomesignore)
+  * [`--mode`](#--singleend)
+    * [`unicycler`](#unicycler)
+    * [`miniasm`](#miniasm)
+    * [`wtdbg2 `](#wtdbg2)
+    * [`all`](#all)
+* [Sample specific parameters]
+  * [`--genomeSize`](#--genomeSize)
+  * [`--minContigLength`](#--minContigLength)
+  * [`--targetShortReadCov / --targetLongReadCov`](#--targetshortreadcov_/_targetlongreadcov)
 * [Job resources](#job-resources)
   * [Automatic resubmission](#automatic-resubmission)
   * [Custom resource requests](#custom-resource-requests)
@@ -136,7 +140,7 @@ The `--mode` options allows to chose between different assemblers. The quality c
 
 #### `unicycler` 
 
-Creates an assembly with the bacterial genome assembler _Unicycler_. This assembly methods is a whole pipeline in itself and in the first step creates a short read assembly using _SPAdes_. The long reads are then mapped to the inital assembly graph in order to solve loops in the graph by creating bridges betwenn the contigs. Additional polishing steps increase the per base accuracy using accurate short reads.  _Unicycler_ is currently the state of the art hybrid assembler for bacteria and is in many cases able to resolve complete closed genomes. _Unicycler_ is executed with default settings. Unicycler is the default mode when not specified different.
+Creates an assembly with the bacterial genome assembler [_Unicycler_](https://github.com/rrwick/Unicycler). This assembly methods is a whole pipeline in itself and in the first step creates a short read assembly using _SPAdes_. The long reads are then mapped to the inital assembly graph in order to solve loops in the graph by creating bridges betwenn the contigs. Additional polishing steps increase the per base accuracy using accurate short reads.  _Unicycler_ is currently the state of the art hybrid assembler for bacteria and is in many cases able to resolve complete closed genomes. _Unicycler_ is executed with default settings. Unicycler is the default mode when not specified different.
 
 ```bash
 --mode unicycler
@@ -144,7 +148,7 @@ Creates an assembly with the bacterial genome assembler _Unicycler_. This assemb
 
 #### `miniasm`
 
-_miniasm_ is a simple and fast long read assembler. It is also suitable for large eukaryotic genomes. _miniasm_ is followed by a consensus step with _racon_ and short read polishing using _Pilon_. 
+[_miniasm_](https://github.com/lh3/miniasm) is a simple and fast long read assembler. It is also suitable for large eukaryotic genomes. _miniasm_ is followed by a consensus step with [_racon_](https://github.com/isovic/racon) and short read polishing using [_Pilon_](https://github.com/broadinstitute/pilon). 
 
 ```bash
 --mode miniasm
@@ -152,7 +156,7 @@ _miniasm_ is a simple and fast long read assembler. It is also suitable for larg
 
 #### `wtdbg2`
 
-`Wtdbg2` is a very recent, and extremely fast long read assembler. It can be used to efficiently assembly large genomes. Similar to `miniasm`, `wtdbg2` is also followed by a `racon` consensus step and a short read polishing using `Pilon` if available.
+[_Wtdbg2_](https://github.com/ruanjue/wtdbg2) is a very recent, and extremely fast long read assembler. It can bei also used to assemble large genomes. A human genome takes about 30 CPU hours and 220Gb of memory. Similar to `miniasm`, `wtdbg2` is also followed by a `racon` consensus step and a short read polishing using `Pilon` if available.
 
 ```bash
 --mode miniasm

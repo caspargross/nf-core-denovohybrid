@@ -1,4 +1,4 @@
-name: denovohybrid
+name: nf-core-denovohybrid-1.0dev
 channels:
   - conda-forge
   - bioconda
@@ -7,6 +7,7 @@ dependencies:
   - _libgcc_mutex=0.1=main
   - asn1crypto=0.24.0=py36_1003
   - attrs=19.1.0=py36_1
+  - bandage=0.8.1=hb59a952_0
   - bcftools=1.8=h4da6232_3
   - biopython=1.73=py36h7b6447c_0
   - blas=1.0=mkl
