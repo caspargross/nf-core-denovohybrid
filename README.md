@@ -1,12 +1,12 @@
-#![nf-core/denovohybrid](docs/logo/nfcore-denovohybrid_logo.png)
+![nf-core/denovohybrid](https://raw.githubusercontent.com/caspargross/nf-core-denovohybrid/master/docs/logo/denovohybrid_logo.png)
 
 **Hybrid genome assembly**.
 
-[![Build Status](https://travis-ci.com/nf-core/denovohybrid.svg?branch=master)](https://travis-ci.com/nf-core/denovohybrid)
+[![Build Status](https://travis-ci.com/caspargross/denovohybrid.svg?branch=master)](https://travis-ci.com/nf-core/denovohybrid)
 [![Nextflow](https://img.shields.io/badge/nextflow-%E2%89%A50.32.0-brightgreen.svg)](https://www.nextflow.io/)
 
 [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg)](http://bioconda.github.io/)
-[![Docker](https://img.shields.io/docker/automated/nfcore/denovohybrid.svg)](https://hub.docker.com/r/nfcore/denovohybrid)
+[![Docker](https://img.shields.io/docker/automated/caspargross/nf-core-denovohybrid.svg)](https://hub.docker.com/r/caspargross/nf-core-denovohybrid)
 
 ## Introduction
 The pipeline is built using [Nextflow](https://www.nextflow.io), a workflow tool to run tasks across multiple compute infrastructures in a very portable manner. It comes with docker containers making installation trivial and results highly reproducible.
@@ -26,5 +26,5 @@ The nf-core/denovohybrid pipeline comes with documentation about the pipeline, f
 
 The *Denovohybrid* pipeline allows the generation of high quality genome assemblies using a combination of long read data (Oxford Nanopore Technologies) and short read data (Illumina Technologies). It includes read preprocessing and quality control, a choice of different assembly methods and quality control of the resulting assemblies. Depending on the assembly method it can be used for Bacteria (using *Unicycler*) or Eukaryotic samples (using *miniasm* or *wtdbg2*). When no short read data is provided, this pipeline automatically creates a long read only assembly. 
 
-## Credits
+## Credits 
 nf-core/denovohybrid was originally written by Caspar Groß.
