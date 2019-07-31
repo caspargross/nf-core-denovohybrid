@@ -26,5 +26,8 @@ The nf-core/denovohybrid pipeline comes with documentation about the pipeline, f
 
 The *Denovohybrid* pipeline allows the generation of high quality genome assemblies using a combination of long read data (Oxford Nanopore Technologies) and short read data (Illumina Technologies). It includes read preprocessing and quality control, a choice of different assembly methods and quality control of the resulting assemblies. Depending on the assembly method it can be used for Bacteria (using *Unicycler*) or Eukaryotic samples (using *miniasm* or *wtdbg2*). When no short read data is provided, this pipeline automatically creates a long read only assembly. 
 
+Todos:
+Check out new assemblers: [Shasta](https://github.com/chanzuckerberg/shasta), [wengan](https://github.com/adigenova/wengan), wait for [flye](https://github.com/fenderglass/Flye) to be available in python3
+
 ## Credits 
 nf-core/denovohybrid was originally written by Caspar Groß.
