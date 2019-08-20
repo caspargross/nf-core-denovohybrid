@@ -12,13 +12,13 @@ and processes data using the following steps:
 * [MultiQC](#multiqc) - aggregate report, describing results of the whole pipeline
 
 ## Porechop
-[Porechop](https://github.com/rrwick/Porechop) is a tool for adapter removal in  Nanopore reads. Adapters at the ends in the middle of chimeric reads are  trimmed off. 
+[Porechop](https://github.com/rrwick/Porechop) is a tool for adapter removal in  Nanopore reads. Adapters at the ends in the middle of chimeric reads are  trimmed off.
 
 ## Filtlong
-[Filtlong](https://github.com/rrwick/Filtlong) is a tool for quality filtering of Nanopore reads. It filter short and low quality reads up to a defined number of bases (calculated by the parameters `--genomeSize` and `--tagetLongReadCov` )  In order to retain enough shorter  reads to cover small plasmids, the filtering is biased towards qualtity instead of read length. 
+[Filtlong](https://github.com/rrwick/Filtlong) is a tool for quality filtering of Nanopore reads. It filter short and low quality reads up to a defined number of bases (calculated by the parameters `--genomeSize` and `--tagetLongReadCov` )  In order to retain enough shorter  reads to cover small plasmids, the filtering is biased towards qualtity instead of read length.
 
 ## NanoPlot
-[Nanoplot](https://wdecoster/NanoPlot) is a tool for quality control of long read sequencing data. It calculates sequence statistics and creates figures for read length and read quality distribution. To analyse the effect of long read trimming and filtering, the qc step is performed twice. 
+[Nanoplot](https://wdecoster/NanoPlot) is a tool for quality control of long read sequencing data. It calculates sequence statistics and creates figures for read length and read quality distribution. To analyse the effect of long read trimming and filtering, the qc step is performed twice.
 
 **Output directory: `results/sample/qc/longread_*` **
 
@@ -49,15 +49,14 @@ For further reading and documentation see the [FastQC help](http://www.bioinform
 * `sample_mode_graph.svg`
   * Image of the graph in `svg` format
 
-##  Assembly step (_Unicycler_, _miniasm_, _wtdbg2_)
+##Assembly step (_Unicycler_, _miniasm_, _wtdbg2_)
 
 A description of the different assemblers can be found in the [usage](usage.md) documentation.
-Depeding on the assembly method chose, a variety of intermediate and outut files will be generated. Normally these files should serve only debugging or more advanced 
-The assemblers produce their output in the folder of the 
+Depeding on the assembly method chose, a variety of intermediate and outut files will be generated. Normally these files are only needed for debugging or in depth analysis of intermediate results. All assemblers generate a `FASTA` file containing the assembled contigs (or complete chromosomes if you are lucky) and additional files specific to the assembly methods.
 
 ## Quast
 
-[Quast](http://bioinf.spbau.ru/quast) is a tool for the quality control of de novo assemblies. In the basic options (without external reference), it calculates quality parameters such as Contig Length distribution and N50 values. 
+[Quast](http://bioinf.spbau.ru/quast) is a tool for the quality control of de novo assemblies. In the basic options (without external reference), it calculates quality parameters such as Contig Length distribution and N50 values.
 
 **Output directory: `results/sample/qc/assembly`  **
 
