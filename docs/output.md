@@ -49,7 +49,7 @@ For further reading and documentation see the [FastQC help](http://www.bioinform
 * `sample_mode_graph.svg`
   * Image of the graph in `svg` format
 
-##Assembly step (_Unicycler_, _miniasm_, _wtdbg2_)
+## Assembly step (_Unicycler_, _miniasm_, _wtdbg2_)
 
 A description of the different assemblers can be found in the [usage](usage.md) documentation.
 Depeding on the assembly method chose, a variety of intermediate and outut files will be generated. Normally these files are only needed for debugging or in depth analysis of intermediate results. All assemblers generate a `FASTA` file containing the assembled contigs (or complete chromosomes if you are lucky) and additional files specific to the assembly methods.
@@ -83,7 +83,7 @@ The assembled genomes are stored at the root sample location. When multiple asse
 
 ## Intermediate assembly results
 
-Intermediate assembly results are only stored when the pipeline ist started using the command line option ` --saveIntermediate`
+Intermediate assembly results are only stored when the pipeline ist started using the command line option `--saveIntermediate`
 
 Depending on the assembly step used, a vaerying number of intermediate results are stored in the locations `results/sample/assembly` and `results/sample/assembly_postprocessing`. The se files are for example unpolished long read assemblies and additional intermediate steps during the assembly steps. This option is useful for debugging and in depth analysis of the assembly algorithms.
 
