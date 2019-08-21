@@ -13,7 +13,7 @@ dependencies:
   - multiqc=1.7
   - ngs-bits=2019_04
   - quast=5.0.2
-  - r=3.5.0
+  - r-base=3.5.0
   - r-markdown=0.8
   - porechop=0.2.3_seqan2.1.1
   - seqtk=1.3
