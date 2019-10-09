@@ -149,7 +149,7 @@ process get_software_versions {
     """
     echo $workflow.manifest.version > v_pipeline.txt
     echo $workflow.nextflow.version > v_nextflow.txt
-    Bandage --version > v_bandage.txt
+    Bandage image --version > v_bandage.txt
     fastqc --version > v_fastqc.txt
     filtlong --version > v_filtlong.txt
     miniasm -V > v_miniasm.txt
@@ -528,16 +528,11 @@ process quast{
 
 process format_final_output {
 // Filter contigs by length and give consistenc contig naming
-    publishDir "${params.outdir}/${id}/genomes/", mode: 'copy'
+    publishDir "${params.outdir}/${id}/final_genomes/", mode: 'copy'
     tag{id}
 
     input:
     set id, contigs, type from asm_format
-
-    output:
-    //set id, type into complete_status
-    set id, type, file("${id}_${type}_genome.fasta") into final_files
-    set id, type, val("${params.outdir}/${id}/genomes/${id}_${type}_genome.fasta") into final_files_plasmident
 
     script:
     data_source = longReadOnly ? "nanopore" : "hybrid"
